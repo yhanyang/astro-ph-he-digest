@@ -349,13 +349,20 @@ or press ▲ next to the entry in the web UI (`POST /promote/<date>/<arXiv id>`)
 
 GPL-3.0. See [LICENSE](LICENSE).
 
-## Repository layout and what is not committed
+## Repository layout: code repo + private content repo
 
-Tracked: the Python package (`core/`), the CLIs (`report.py`, `build_site.py`, `wiki.py`, `sanity.py`, `promote.py`, `citations.py`, `prefetch.py`, `manual_digest.py`), the web UI (`server.py`, `templates/`, `static/`), the shell entry points (`run_report.sh`, `run_server.sh`, `scheduler.sh`, `backfill.sh`, `phase2_runner.sh`, `env.sh`, `bin/claude`) and the GitHub workflow.
+This repository holds only the code. Everything generated lives under `reports/`, which is **its own git repository** (private, e.g. `astro-ph-he-digest-content`), exactly like the `gh-pages` checkout the GitHub workflow uses:
 
-Generated or private, therefore git-ignored:
+```
+reports/
+├── arXiv_astro_ph_HE_daily_report_<date>.html   rendered daily reports
+├── fragments/<date>.html                        the stored LLM digests (the real content)
+├── week-*.html  month-*.html  year-*.html       summaries · index.html = tabbed site
+├── wiki/                                        HTML export of the wiki
+├── .data/papers.db                              corpus, 👍/👎, notes, SciX citations
+└── .wiki/                                       Obsidian vault (your reading notes live here)
+```
 
-- `reports/` — the rendered site (daily reports, `fragments/` with the stored digests, week/month/year summaries, `wiki/` HTML export). On GitHub this is the `gh-pages` branch that the workflow checks out and pushes.
-- `data/` — the paper corpus, feedback (👍/👎), notes and SciX citation cache (`papers.db`) plus the TF-IDF cache.
-- `wiki/` — the Obsidian vault (rebuilt from `data/` + `reports/fragments/`; your reading notes live here, back it up separately).
-- `env.local.sh` — host / allowed networks / tokens for one machine; API tokens otherwise come from the environment or `~/.scix/token`.
+`core.corpus` and `core.wiki` pick `reports/.data` / `reports/.wiki` automatically when those directories exist (`SANITY_DATA_DIR` / `WIKI_DIR` override). The content repo ignores only caches and logs (`.cache/`, `*.log`, `.data/features.pkl`). `scheduler.sh` commits and pushes it after every successful run (`CONTENT_PUSH=1`); restoring a machine is `git clone` of both repos followed by `./run_server.sh`.
+
+Git-ignored in the code repo: `reports/` (the content repo), `data/` and `wiki/` (legacy locations), `env.local.sh` (host, allowed networks, tokens), `.venv/`, logs.

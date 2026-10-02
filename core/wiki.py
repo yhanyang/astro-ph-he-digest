@@ -35,7 +35,9 @@ import uuid
 from core import corpus
 from core.render import FRAGMENTS_DIR
 
-WIKI_DIR = os.getenv('WIKI_DIR', './wiki')
+WIKI_DIR = os.getenv('WIKI_DIR') or (
+    './reports/.wiki' if os.path.isdir('./reports/.wiki') else './wiki'
+)
 RAW_DIR = os.path.join(WIKI_DIR, '.raw')
 LOG_DIR = os.path.join(WIKI_DIR, '.log')
 LOG_PATH = os.path.join(LOG_DIR, 'operations.jsonl')
@@ -575,7 +577,12 @@ class Build:
             'topics': sorted({TOPIC_NAME.get(t, t) for p in papers for t in p.get('_topics', [])}),
         }
         body = [f'# {date} — {len(papers)} papers', '']
-        rel_report = f'../../reports/arXiv_astro_ph_HE_daily_report_{date}.html'
+        from core.render import REPORTS_DIR
+
+        rel_report = os.path.relpath(
+            os.path.join(REPORTS_DIR, f'arXiv_astro_ph_HE_daily_report_{date}.html'),
+            os.path.join(WIKI_DIR, 'daily'),
+        ).replace(os.sep, '/')
         body.append(f'[Open HTML report]({rel_report})')
         if digest and digest['highlights']:
             body += ['', '## Highlights', '']

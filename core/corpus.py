@@ -17,7 +17,11 @@ import re
 import sqlite3
 import time
 
-DATA_DIR = os.getenv('SANITY_DATA_DIR', './data')
+# Corpus location: SANITY_DATA_DIR, else reports/.data when that layout exists (the content
+# repo / gh-pages layout, everything generated under reports/), else ./data.
+DATA_DIR = os.getenv('SANITY_DATA_DIR') or (
+    './reports/.data' if os.path.isdir('./reports/.data') else './data'
+)
 DB_PATH = os.path.join(DATA_DIR, 'papers.db')
 
 _ARXIV_ID_RE = re.compile(r'/abs/([^/?#]+?)(?:v\d+)?/?(?:[?#]|$)')

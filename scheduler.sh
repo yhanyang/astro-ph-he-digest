@@ -10,6 +10,7 @@
 # dated that next day, so the pipeline runs Mon–Fri at RUN_AT local time (default 05:00).
 # A failed run (network, arXiv 429, LLM error) is retried every RETRY_WAIT seconds, up to
 # RETRIES times. With KEEP_SERVER=1 (default) the web UI is (re)started if it is not listening.
+# With CONTENT_PUSH=1 (default) the content repo in reports/ is committed and pushed after a run.
 # Logs: reports/scheduler.log (this script) and reports/daily-YYYY-MM-DD.log (pipeline output).
 set -uo pipefail
 source "$(dirname "$0")/env.sh"
@@ -20,6 +21,7 @@ TZ_LOCAL="${TZ_LOCAL:-Europe/Rome}"
 RETRIES="${RETRIES:-4}"
 RETRY_WAIT="${RETRY_WAIT:-1800}"
 KEEP_SERVER="${KEEP_SERVER:-1}"
+CONTENT_PUSH="${CONTENT_PUSH:-1}"             # commit/push reports/ after each successful run
 PORT="${PORT:-8080}"
 LOG="reports/scheduler.log"
 LOCK="reports/.scheduler.lock"
@@ -49,6 +51,18 @@ ensure_server() {
     fi
 }
 
+push_content() {
+    # Commit + push the content repo (reports/ is its own git repo) when CONTENT_PUSH=1.
+    [ "$CONTENT_PUSH" = "1" ] || return 0
+    [ -d reports/.git ] || { log "CONTENT_PUSH=1 but reports/ is not a git repo"; return 0; }
+    if git -C reports add -A && ! git -C reports diff --cached --quiet; then
+        git -C reports commit -qm "Reports $1" && log "content repo: committed $1"
+    fi
+    if git -C reports remote get-url origin >/dev/null 2>&1; then
+        if git -C reports push -q 2>>"$LOG"; then log "content repo: pushed"; else log "content repo: push FAILED (see $LOG)"; fi
+    fi
+}
+
 run_pipeline() {
     local attempt=1 day
     day=$(TZ=$TZ_LOCAL date +%F)
@@ -56,6 +70,7 @@ run_pipeline() {
         log "run_report.sh starting (attempt $attempt/$((RETRIES + 1)))"
         if ./run_report.sh >> "reports/daily-$day.log" 2>&1; then
             log "pipeline finished OK — see reports/daily-$day.log"
+            push_content "$day"
             return 0
         fi
         log "pipeline FAILED (exit $?) — see reports/daily-$day.log"
