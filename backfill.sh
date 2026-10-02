@@ -6,12 +6,12 @@
 # Exit codes: 0 = done, 2 = aborted because one day failed 4 times in a row (likely an LLM usage limit).
 #
 #   ./backfill.sh 2026-09-01 2026-09-25            # every weekday in the range
-#   nohup ./backfill.sh 2026-09-01 2026-09-25 > reports/backfill.log 2>&1 &   # survives closing the laptop
+#   nohup ./backfill.sh 2026-09-01 2026-09-25 > astro-ph-reports/backfill.log 2>&1 &   # survives closing the laptop
 set -uo pipefail
 source "$(dirname "$0")/env.sh"
 cd "$HERE"
 start="${1:?start date YYYY-MM-DD}"; end="${2:?end date YYYY-MM-DD}"
-has_digest() { [[ -f "reports/arXiv_astro_ph_HE_daily_report_$1.html" ]] && ! grep -qF '<!-- index-only -->' "reports/fragments/$1.html" 2>/dev/null; }
+has_digest() { [[ -f "$REPORTS_DIR/arXiv_astro_ph_HE_daily_report_$1.html" ]] && ! grep -qF '<!-- index-only -->' "$REPORTS_DIR/fragments/$1.html" 2>/dev/null; }
 rebuild() {
   "$PY" build_site.py
   for w in $("$PY" -c "

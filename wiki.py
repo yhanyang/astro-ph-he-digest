@@ -25,7 +25,9 @@ def main() -> int:
     lt.add_argument('--json', action='store_true')
     f = sub.add_parser('fold', help='write the weekly rollup note')
     f.add_argument('--week', help='ISO week, e.g. 2026-W40 (default: current week)')
-    sub.add_parser('html', help='export the vault to reports/wiki/*.html (linked with the reports)')
+    sub.add_parser(
+        'html', help='export the vault to <REPORTS_DIR>/wiki/*.html (linked with the reports)'
+    )
     lg = sub.add_parser('log', help='show the operations journal')
     lg.add_argument('-n', type=int, default=20)
     a = ap.parse_args()

@@ -33,10 +33,13 @@ import re
 import uuid
 
 from core import corpus
+from core.config import REPORTS_DIR
 from core.render import FRAGMENTS_DIR
 
 WIKI_DIR = os.getenv('WIKI_DIR') or (
-    './reports/.wiki' if os.path.isdir('./reports/.wiki') else './wiki'
+    os.path.join(REPORTS_DIR, '.wiki')
+    if os.path.isdir(os.path.join(REPORTS_DIR, '.wiki'))
+    else './wiki'
 )
 RAW_DIR = os.path.join(WIKI_DIR, '.raw')
 LOG_DIR = os.path.join(WIKI_DIR, '.log')
@@ -577,8 +580,6 @@ class Build:
             'topics': sorted({TOPIC_NAME.get(t, t) for p in papers for t in p.get('_topics', [])}),
         }
         body = [f'# {date} — {len(papers)} papers', '']
-        from core.render import REPORTS_DIR
-
         rel_report = os.path.relpath(
             os.path.join(REPORTS_DIR, f'arXiv_astro_ph_HE_daily_report_{date}.html'),
             os.path.join(WIKI_DIR, 'daily'),
@@ -1098,9 +1099,9 @@ def fold(week: str | None = None) -> str:
 
 
 # --------------------------------------------------------------------------- HTML export
-HTML_DIR = os.path.join(os.path.dirname(FRAGMENTS_DIR), 'wiki')  # reports/wiki
+HTML_DIR = os.path.join(REPORTS_DIR, 'wiki')  # <REPORTS_DIR>/wiki
 _CALLOUT_RE = re.compile(r'^> \[!(\w+)\]\s*(.*)\n((?:> ?.*\n?)*)', re.M)
-_MD_LINK_REPORT_RE = re.compile(r'\]\(\.\./\.\./reports/')
+_MD_LINK_REPORT_RE = re.compile(r'\]\(\.\./\.\./(?:reports|astro-ph-reports)/')
 
 
 def _html_path(rel_md: str) -> str:
@@ -1211,7 +1212,7 @@ _DAILY_REPORT_A_RE = re.compile(
 
 
 def export_html() -> int:
-    """Render every note to ``reports/wiki/*.html`` with resolved wikilinks and report links."""
+    """Render every note to ``<REPORTS_DIR>/wiki/*.html`` with resolved wikilinks and report links."""
     notes = _iter_notes()
     names = {os.path.splitext(os.path.basename(rel))[0]: rel for rel in notes}
     os.makedirs(HTML_DIR, exist_ok=True)

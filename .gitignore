@@ -63,6 +63,7 @@ dist/
 docs/
 tests/
 reports/
+astro-ph-reports/
 CLAUDE.md
 
 # arxiv-sanity-lite style corpus (SQLite + TF-IDF cache)

@@ -1,7 +1,7 @@
 """Slow, resumable backfill of listing days: fetch (rate-limit aware) and, optionally,
 write index-only reports so the site, wiki and search cover the range without an LLM.
 
-    nohup .venv/bin/python prefetch.py --from 2026-01-01 --to 2026-07-31 --index-only > reports/prefetch.log 2>&1 &
+    nohup .venv/bin/python prefetch.py --from 2026-01-01 --to 2026-07-31 --index-only > astro-ph-reports/prefetch.log 2>&1 &
 
 Newest day first. A day that already has a real digest is left alone; a cached day is not
 fetched again; an index-only report is only written where no digest exists. Every

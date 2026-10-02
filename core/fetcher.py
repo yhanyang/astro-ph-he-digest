@@ -16,12 +16,14 @@ import feedparser
 import holidays
 import pytz
 
+from core.config import REPORTS_DIR
+
 ARXIV_QUERY = 'cat:astro-ph.he'
 ARXIV_MAX_RESULTS = 500
 ARXIV_TZ = pytz.timezone('US/Eastern')
 ARXIV_RSS_URL = 'http://export.arxiv.org/rss/astro-ph.HE'
-ARXIV_CACHE_DIR = './reports/.cache'
-ARXIV_COOLDOWN_PATH = './reports/.cache/arxiv_api_cooldown'
+ARXIV_CACHE_DIR = os.path.join(REPORTS_DIR, '.cache')
+ARXIV_COOLDOWN_PATH = os.path.join(ARXIV_CACHE_DIR, 'arxiv_api_cooldown')
 ARXIV_COOLDOWN_SECONDS = 30 * 60  # after a 429, skip the api for 30 minutes
 
 # Federal holidays arXiv actually defers announcements for. The `holidays`

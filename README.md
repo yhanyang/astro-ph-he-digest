@@ -22,7 +22,7 @@ What the team sees at `https://<user>.github.io/<repo>/`:
 One-time setup:
 
 1. **Add an API key.** *Settings → Secrets and variables → Actions → New repository secret*: add `CLAUDE_API_KEY` (or `GEMINI_API_KEY` / `OPENAI_API_KEY`, and set the repository variable `PREFERRED_PROVIDER` to `gemini` or `openai`).
-2. **Optional variables** (*Variables* tab): `CLAUDE_MODEL` / `GEMINI_MODEL` / `OPENAI_MODEL`, `FALLBACK_ORDER` (e.g. `claude,gemini`), `SITE_TITLE` and `SITE_TEAM`. The workflow keeps the paper corpus and the wiki vault inside the `gh-pages` branch (`reports/.data`, `reports/.wiki`) so search, similar-paper and wiki pages work on the published site too.
+2. **Optional variables** (*Variables* tab): `CLAUDE_MODEL` / `GEMINI_MODEL` / `OPENAI_MODEL`, `FALLBACK_ORDER` (e.g. `claude,gemini`), `SITE_TITLE` and `SITE_TEAM`. The workflow keeps the paper corpus and the wiki vault inside the `gh-pages` branch (`astro-ph-reports/.data`, `astro-ph-reports/.wiki`) so search, similar-paper and wiki pages work on the published site too.
 3. **Run it once.** *Actions → Daily arXiv report → Run workflow*. The first run creates the `gh-pages` branch.
 4. **Turn on Pages.** *Settings → Pages → Deploy from a branch → `gh-pages` / `(root)`*.
 
@@ -57,7 +57,7 @@ On a public repository the Pages site is public. The "Save to Craft" buttons are
 ├── prefetch.py            slow, resumable fetch of a date range + optional index-only reports
 ├── phase2_runner.sh       waits for prefetch.py, then runs backfill.sh month by month until done
 ├── wiki.py                CLI for the Obsidian wiki: build / lint / fold / log
-├── build_site.py          static GitHub Pages site from reports/
+├── build_site.py          static GitHub Pages site from astro-ph-reports/
 ├── run_report.sh          report.py + build_site.py with the Claude CLI backend (see env.sh)
 ├── run_server.sh          web UI with the same environment
 ├── core/                  domain package
@@ -80,7 +80,7 @@ On a public repository the Pages site is public. The "Save to Craft" buttons are
 ├── tests/                 pytest suite (31 cases)
 ├── data/                  papers.db + features.pkl (gitignored)
 ├── wiki/                  Obsidian vault (papers/ topics/ objects/ daily/ weekly/ Home.md MAINTENANCE.md)
-└── reports/               generated daily reports (gitignored)
+└── astro-ph-reports/      generated content: reports, fragments, summaries, wiki, .data, .wiki (own private git repo)
 ```
 
 ## Installation
@@ -148,16 +148,16 @@ python report.py
 # Phase 0 + 1: slowly fetch every listing day (75 s between arXiv requests, waits out 429 cooldowns,
 # resumable) and write an *index-only* report for each day: all papers filed by keyword with title and
 # abstract, no LLM. Site, wiki and search cover the range right away. Newest day first.
-nohup .venv/bin/python prefetch.py --from 2026-01-01 --to 2026-07-31 --index-only > reports/prefetch.log 2>&1 &
+nohup .venv/bin/python prefetch.py --from 2026-01-01 --to 2026-07-31 --index-only > astro-ph-reports/prefetch.log 2>&1 &
 
 # Phase 2: real digests month by month with the configured LLM backend; index-only days are
 # regenerated, days that already have a digest are skipped.
-nohup ./backfill.sh 2026-07-01 2026-07-31 > reports/backfill.log 2>&1 &
+nohup ./backfill.sh 2026-07-01 2026-07-31 > astro-ph-reports/backfill.log 2>&1 &
 
 # Or let a runner do phase 2 automatically: it waits for prefetch.py to finish, then runs backfill.sh
 # month by month (newest first), pauses 2 h when the LLM is unavailable (usage limit) and repeats
-# passes until no index-only day is left. Progress in reports/phase2.log and reports/backfill-YYYY-MM.log.
-setsid nohup ./phase2_runner.sh 2026-01-01 2026-07-31 > reports/phase2.log 2>&1 < /dev/null &
+# passes until no index-only day is left. Progress in astro-ph-reports/phase2.log and astro-ph-reports/backfill-YYYY-MM.log.
+setsid nohup ./phase2_runner.sh 2026-01-01 2026-07-31 > astro-ph-reports/phase2.log 2>&1 < /dev/null &
 ```
 
 Index-only reports are marked (`<!-- index-only -->` in the fragment) and show an *Index-only report* box instead of entries; the Field Index chips, the wiki notes and the search index work as usual, and any paper can be promoted individually.
@@ -167,7 +167,7 @@ Index-only reports are marked (`<!-- index-only -->` in the fragment) and show a
 ```bash
 # Every weekday in a range with the configured provider; skips days that already have a report,
 # waits out arXiv rate-limit cooldowns, rebuilds site + wiki once at the end. Survives a closed laptop:
-nohup ./backfill.sh 2026-09-01 2026-09-25 > reports/backfill.log 2>&1 &
+nohup ./backfill.sh 2026-09-01 2026-09-25 > astro-ph-reports/backfill.log 2>&1 &
 
 # Write a digest by hand (or paste the prompt into a chat and save the answer):
 python manual_digest.py prompt 2026-09-01 --out /tmp/d   # exact prompt + papers for that listing day
@@ -184,7 +184,7 @@ pip install -r requirements.txt
 uvicorn server:app --reload --port 8080
 ```
 
-To run the pipeline automatically on the server, start `setsid nohup ./scheduler.sh > /dev/null 2>&1 &` once: it runs `run_report.sh` Mon–Fri at `RUN_AT` (default 05:00 Europe/Rome, after the 20:00 ET announcement), retries failures every 30 min (4×), keeps the web UI alive (`KEEP_SERVER=1`) and logs to `reports/scheduler.log`; `./scheduler.sh --dry-run` prints the next run, `pkill -f scheduler.sh` stops it.
+To run the pipeline automatically on the server, start `setsid nohup ./scheduler.sh > /dev/null 2>&1 &` once: it runs `run_report.sh` Mon–Fri at `RUN_AT` (default 05:00 Europe/Rome, after the 20:00 ET announcement), retries failures every 30 min (4×), keeps the web UI alive (`KEEP_SERVER=1`) and logs to `astro-ph-reports/scheduler.log`; `./scheduler.sh --dry-run` prints the next run, `pkill -f scheduler.sh` stops it.
 
 Then open http://localhost:8080. To share the UI on the lab network set `HOST=0.0.0.0` and `ALLOWED_NETS` (CIDRs that may connect; everyone else gets 403) in `env.local.sh` (git-ignored, sourced by `env.sh`); optionally set `UI_TOKEN` so that only browsers unlocked once via `/unlock?token=…` can write (👍/👎, notes, promote, generate) while others read. The home page is the tabbed site (Day / Week / Month / Year) served at `/site/`; when served by the web UI it loads the reports through `/r/<date>/raw` and the summaries through `/s/…/raw`, so the promote, like/dislike, similar and wiki buttons all work there, and the header links to Search, Recommend and Starred. The same `index.html` on GitHub Pages falls back to plain static files (read-only). `/r/<date>` still opens a report in the sidebar UI; click a date in the sidebar to switch, or pick a fresh date and click **Generate report** to spawn a background generation task with live SSE progress.
 
@@ -208,7 +208,7 @@ These features are a port of [karpathy/arxiv-sanity-lite](https://github.com/kar
 **CLI**
 
 ```bash
-python sanity.py import-cache                 # backfill the corpus from reports/.cache/*.json
+python sanity.py import-cache                 # backfill the corpus from astro-ph-reports/.cache/*.json
 python sanity.py stats
 python sanity.py search magnetar FRB --days 30
 python sanity.py similar 2609.38341
@@ -243,7 +243,7 @@ The corpus only contains papers this instance has fetched. On GitHub Actions the
 - *Weekly*: `fold` writes an extractive rollup; every line links to the note it came from, nothing is paraphrased.
 - *Review* (`WIKI_REVIEW_DAYS`, default 90): topic/object overviews carry `reviewed: YYYY-MM-DD`; `lint` lists the ones that are overdue so curated text does not rot. New notes get one review window of grace.
 
-**HTML export.** `python wiki.py html` renders every note to `reports/wiki/*.html` (same look as the reports, light/dark). The export is published with the site and served by the web UI at `/wiki/`. Links go both ways: each paper entry in a report has a 📖 button to its wiki note, and each wiki paper/daily note has an *Open in report* button that lands on the right day and anchor. The Markdown vault in `wiki/` stays the source of truth; the HTML is a build artifact.
+**HTML export.** `python wiki.py html` renders every note to `astro-ph-reports/wiki/*.html` (same look as the reports, light/dark). The export is published with the site and served by the web UI at `/wiki/`. Links go both ways: each paper entry in a report has a 📖 button to its wiki note, and each wiki paper/daily note has an *Open in report* button that lands on the right day and anchor. The Markdown vault in `wiki/` stays the source of truth; the HTML is a build artifact.
 
 **Linter** (`python wiki.py lint [--strict] [--json]`): dead wikilinks, orphans, metadata gaps per note type, stale indexes (auto block differs from a fresh dry-run build), papers whose listing day has no entry at all (abstract-only *Other topics* entries are counted separately), overdue reviews. `--strict` exits non-zero on dead links, gaps or stale indexes.
 
@@ -265,7 +265,7 @@ ruff check .         # lint
 ruff format .        # format in place
 ```
 
-Tests cover the FastAPI shim layer (route handlers, the background `_worker`, the SSE generator). The `core/` package is exercised by the production runs that have built up `reports/`.
+Tests cover the FastAPI shim layer (route handlers, the background `_worker`, the SSE generator). The `core/` package is exercised by the production runs that have built up `astro-ph-reports/`.
 
 ## Output Structure
 
@@ -351,10 +351,10 @@ GPL-3.0. See [LICENSE](LICENSE).
 
 ## Repository layout: code repo + private content repo
 
-This repository holds only the code. Everything generated lives under `reports/`, which is **its own git repository** (private, e.g. `astro-ph-he-digest-content`), exactly like the `gh-pages` checkout the GitHub workflow uses:
+This repository holds only the code. Everything generated lives under `astro-ph-reports/` (`REPORTS_DIR`), which is **its own git repository** (private, e.g. `astro-ph-he-digest-content`), exactly like the `gh-pages` checkout the GitHub workflow uses:
 
 ```
-reports/
+astro-ph-reports/
 ├── arXiv_astro_ph_HE_daily_report_<date>.html   rendered daily reports
 ├── fragments/<date>.html                        the stored LLM digests (the real content)
 ├── week-*.html  month-*.html  year-*.html       summaries · index.html = tabbed site
@@ -363,6 +363,6 @@ reports/
 └── .wiki/                                       Obsidian vault (your reading notes live here)
 ```
 
-`core.corpus` and `core.wiki` pick `reports/.data` / `reports/.wiki` automatically when those directories exist (`SANITY_DATA_DIR` / `WIKI_DIR` override). The content repo ignores only caches and logs (`.cache/`, `*.log`, `.data/features.pkl`). `scheduler.sh` commits and pushes it after every successful run (`CONTENT_PUSH=1`); restoring a machine is `git clone` of both repos followed by `./run_server.sh`.
+`core.corpus` and `core.wiki` pick `astro-ph-reports/.data` / `astro-ph-reports/.wiki` automatically when those directories exist (`SANITY_DATA_DIR` / `WIKI_DIR` override). The content repo ignores only caches and logs (`.cache/`, `*.log`, `.data/features.pkl`). `scheduler.sh` commits and pushes it after every successful run (`CONTENT_PUSH=1`); restoring a machine is `git clone` of both repos followed by `./run_server.sh`.
 
-Git-ignored in the code repo: `reports/` (the content repo), `data/` and `wiki/` (legacy locations), `env.local.sh` (host, allowed networks, tokens), `.venv/`, logs.
+Git-ignored in the code repo: `astro-ph-reports/` (the content repo), `data/` and `wiki/` (legacy locations), `env.local.sh` (host, allowed networks, tokens), `.venv/`, logs.

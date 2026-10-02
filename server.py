@@ -331,7 +331,7 @@ app.mount('/static', StaticFiles(directory='static'), name='static')
 # The static GitHub Pages site (index.html with Today / This Week / This Month, summaries, wiki),
 # so that forwarding this single port is enough to browse everything from another machine.
 app.mount('/site', StaticFiles(directory=REPORTS_DIR, check_dir=False, html=True), name='site')
-# HTML export of the Obsidian wiki (written by `wiki.py html` into reports/wiki).
+# HTML export of the Obsidian wiki (written by `wiki.py html` into <REPORTS_DIR>/wiki).
 app.mount(
     '/wiki',
     StaticFiles(directory=os.path.join(REPORTS_DIR, 'wiki'), check_dir=False, html=True),

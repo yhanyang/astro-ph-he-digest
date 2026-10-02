@@ -1,6 +1,6 @@
 """Build the static GitHub Pages site from the reports directory.
 
-Writes into ``reports/``:
+Writes into ``REPORTS_DIR`` (default ``astro-ph-reports/``):
 
 * ``index.html`` -- header (arXiv · astro-ph.HE · team) with tabs:
   **Day** (latest listing by default, ‹ › and a day picker), **Week** (week summary, ‹ › and a

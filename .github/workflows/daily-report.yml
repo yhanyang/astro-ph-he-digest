@@ -36,17 +36,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Check out the published site (gh-pages) into reports/
+      - name: Check out the published site (gh-pages) into astro-ph-reports/
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
             git fetch origin gh-pages
-            git worktree add -B gh-pages reports origin/gh-pages
+            git worktree add -B gh-pages astro-ph-reports origin/gh-pages
           else
-            git worktree add --detach reports
-            git -C reports checkout --orphan gh-pages
-            git -C reports rm -rfq .
+            git worktree add --detach astro-ph-reports
+            git -C astro-ph-reports checkout --orphan gh-pages
+            git -C astro-ph-reports rm -rfq .
           fi
 
       - name: Configure LLM provider
@@ -70,8 +70,9 @@ jobs:
             [ -n "$V_SITE_TITLE" ] && echo "SITE_TITLE=$V_SITE_TITLE"
             [ -n "$V_SITE_TEAM" ] && echo "SITE_TEAM=$V_SITE_TEAM"
             # Paper corpus and wiki vault live inside the gh-pages checkout so they persist between runs.
-            echo "SANITY_DATA_DIR=reports/.data"
-            echo "WIKI_DIR=reports/.wiki"
+            echo "REPORTS_DIR=astro-ph-reports"
+            echo "SANITY_DATA_DIR=astro-ph-reports/.data"
+            echo "WIKI_DIR=astro-ph-reports/.wiki"
             true
           } >> "$GITHUB_ENV"
 
@@ -109,7 +110,7 @@ jobs:
           python wiki.py lint || true
 
       - name: Publish to gh-pages
-        working-directory: reports
+        working-directory: astro-ph-reports
         run: |
           rm -rf .cache
           git add -A

@@ -29,3 +29,7 @@ CRAFT_ARXIV_FOLDER_ID = os.getenv('CRAFT_ARXIV_FOLDER_ID', '')
 
 # Optional team / project name shown next to the site title (static site, reports, web UI). Empty = personal use.
 SITE_TEAM = os.getenv('SITE_TEAM', '')
+
+# Where everything generated lives (daily reports, fragments/, summaries, wiki/ export, .data/,
+# .wiki/, .cache/). This directory is its own git repository (the private content repo).
+REPORTS_DIR = os.getenv('REPORTS_DIR', './astro-ph-reports').rstrip('/')

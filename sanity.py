@@ -20,7 +20,7 @@ def main() -> int:
     sub = ap.add_subparsers(dest='cmd', required=True)
 
     sub.add_parser('stats', help='corpus size and date range')
-    sub.add_parser('import-cache', help='backfill the corpus from reports/.cache/*.json')
+    sub.add_parser('import-cache', help='backfill the corpus from <REPORTS_DIR>/.cache/*.json')
     sub.add_parser('compute', help='rebuild TF-IDF features')
 
     s = sub.add_parser('search', help='keyword search')

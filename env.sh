@@ -7,6 +7,8 @@ export CLAUDE_BACKEND=cli                # uses the logged-in Claude Code accoun
 # A nested Claude Code session must not look like one to the child CLI.
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 PY="$HERE/.venv/bin/python"
+# Content directory (reports, fragments, summaries, wiki export, .data, .wiki); its own git repo.
+export REPORTS_DIR="${REPORTS_DIR:-astro-ph-reports}"
 # NASA SciX token for citation counts (https://scixplorer.org/user/settings/token; ADS tokens work too).
 # export SCIX_API_TOKEN=...           # or put it in ~/.scix/token
 

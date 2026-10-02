@@ -4,14 +4,13 @@ import datetime
 import os
 
 from core import feedback as _feedback
-from core.config import CRAFT_ARXIV_FOLDER_ID, CRAFT_SPACE_ID, SITE_TEAM
+from core.config import CRAFT_ARXIV_FOLDER_ID, CRAFT_SPACE_ID, REPORTS_DIR, SITE_TEAM
 from core.corpus import arxiv_pid
 from core.report_post import apply_citations, apply_feedback, finalize_report, parse_index
 from core.topics import CHIP_CSS, FOCUS_LABELS, topic_style_json
 
 _KICKER = 'arXiv · astro-ph.HE' + (f' · {SITE_TEAM}' if SITE_TEAM else '')
 
-REPORTS_DIR = './reports'
 FRAGMENTS_DIR = os.path.join(REPORTS_DIR, 'fragments')
 STARRED_REPORT = 'starred.html'
 

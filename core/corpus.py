@@ -17,10 +17,14 @@ import re
 import sqlite3
 import time
 
-# Corpus location: SANITY_DATA_DIR, else reports/.data when that layout exists (the content
-# repo / gh-pages layout, everything generated under reports/), else ./data.
+from core.config import REPORTS_DIR
+
+# Corpus location: SANITY_DATA_DIR, else <REPORTS_DIR>/.data when that layout exists (the
+# content repo / gh-pages layout, everything generated in one directory), else ./data.
 DATA_DIR = os.getenv('SANITY_DATA_DIR') or (
-    './reports/.data' if os.path.isdir('./reports/.data') else './data'
+    os.path.join(REPORTS_DIR, '.data')
+    if os.path.isdir(os.path.join(REPORTS_DIR, '.data'))
+    else './data'
 )
 DB_PATH = os.path.join(DATA_DIR, 'papers.db')
 
@@ -172,11 +176,12 @@ def report_date_for_window_end(end_day: datetime.date) -> datetime.date:
     return end_day + datetime.timedelta(days=3 if end_day.weekday() == 4 else 1)
 
 
-def import_cache(cache_dir: str = './reports/.cache') -> int:
+def import_cache(cache_dir: str | None = None) -> int:
     """Backfill the corpus from the fetcher's per-window JSON cache files.
 
     Returns the number of newly added papers.
     """
+    cache_dir = cache_dir or os.path.join(REPORTS_DIR, '.cache')
     added = 0
     for path in sorted(glob.glob(os.path.join(cache_dir, 'arxiv_*.json'))):
         m = _CACHE_NAME_RE.search(os.path.basename(path))
