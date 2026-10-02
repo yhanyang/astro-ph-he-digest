@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Project-local `claude` command for core/providers.py (CLAUDE_BACKEND=cli).
+# Runs the Claude Code CLI bundled with the newest installed VS Code extension;
+# resolved at call time so extension upgrades do not break it.
+# Override with CLAUDE_CLI=/path/to/claude if you install the CLI elsewhere.
+if [ -n "$CLAUDE_CLI" ]; then
+  exec "$CLAUDE_CLI" "$@"
+fi
+bin=$(ls -d "$HOME"/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude 2>/dev/null | sort -V | tail -n1)
+if [ -z "$bin" ]; then
+  echo "claude: no Claude Code binary found; set CLAUDE_CLI=/path/to/claude" >&2
+  exit 127
+fi
+exec "$bin" "$@"

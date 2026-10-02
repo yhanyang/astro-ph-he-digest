@@ -1,0 +1,121 @@
+name: Daily arXiv report
+
+on:
+  schedule:
+    # arXiv announces Sun-Thu at 20:00 ET. 02:30 UTC Mon-Fri is 22:30 EDT / 21:30 EST,
+    # i.e. 1.5-2.5 h after the announcement (04:30 / 03:30 in Rome), leaving time for
+    # the API to catch up. GitHub may start scheduled runs a little late.
+    - cron: '30 2 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Listing date YYYY-MM-DD as shown on arXiv (e.g. 2026-09-29). Leave empty for the latest announcement.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-report
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check out the published site (gh-pages) into reports/
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git fetch origin gh-pages
+            git worktree add -B gh-pages reports origin/gh-pages
+          else
+            git worktree add --detach reports
+            git -C reports checkout --orphan gh-pages
+            git -C reports rm -rfq .
+          fi
+
+      - name: Configure LLM provider
+        env:
+          V_PREFERRED_PROVIDER: ${{ vars.PREFERRED_PROVIDER }}
+          V_FALLBACK_ORDER: ${{ vars.FALLBACK_ORDER }}
+          V_CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+          V_GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          V_OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          V_SITE_TITLE: ${{ vars.SITE_TITLE }}
+          V_SITE_TEAM: ${{ vars.SITE_TEAM }}
+        run: |
+          {
+            echo "PREFERRED_PROVIDER=${V_PREFERRED_PROVIDER:-claude}"
+            echo "FALLBACK_ORDER=${V_FALLBACK_ORDER:-claude}"
+            echo "CLAUDE_BACKEND=api"
+            echo "OPENAI_BACKEND=api"
+            [ -n "$V_CLAUDE_MODEL" ] && echo "CLAUDE_MODEL=$V_CLAUDE_MODEL"
+            [ -n "$V_GEMINI_MODEL" ] && echo "GEMINI_MODEL=$V_GEMINI_MODEL"
+            [ -n "$V_OPENAI_MODEL" ] && echo "OPENAI_MODEL=$V_OPENAI_MODEL"
+            [ -n "$V_SITE_TITLE" ] && echo "SITE_TITLE=$V_SITE_TITLE"
+            [ -n "$V_SITE_TEAM" ] && echo "SITE_TEAM=$V_SITE_TEAM"
+            # Paper corpus and wiki vault live inside the gh-pages checkout so they persist between runs.
+            echo "SANITY_DATA_DIR=reports/.data"
+            echo "WIKI_DIR=reports/.wiki"
+            true
+          } >> "$GITHUB_ENV"
+
+      - name: Generate report
+        env:
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          REPORT_DATE: ${{ inputs.date }}
+        run: |
+          if [ -z "$REPORT_DATE" ]; then
+            # Listings are dated the day after the 20:00 ET announcement.
+            if [ "$(TZ=America/New_York date +%H)" -ge 20 ]; then
+              REPORT_DATE=$(TZ=America/New_York date -d tomorrow +%F)
+            else
+              REPORT_DATE=$(TZ=America/New_York date +%F)
+            fi
+          fi
+          echo "Listing date: $REPORT_DATE"
+          python report.py --date "$REPORT_DATE"
+
+      - name: Refresh SciX citation counts (optional, needs the SCIX_API_TOKEN secret)
+        env:
+          SCIX_API_TOKEN: ${{ secrets.SCIX_API_TOKEN }}
+        run: python citations.py refresh --quiet --max-requests 60 || true
+
+      - name: Build site index
+        run: python build_site.py
+
+      - name: Build wiki (Markdown vault + HTML export)
+        run: |
+          python wiki.py fold
+          python wiki.py build
+          python wiki.py html
+          python wiki.py lint || true
+
+      - name: Publish to gh-pages
+        working-directory: reports
+        run: |
+          rm -rf .cache
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'Nothing new to publish.'
+            exit 0
+          fi
+          git commit -qm "Report $(date -u +%Y-%m-%d)"
+          git push origin gh-pages

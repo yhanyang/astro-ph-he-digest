@@ -1,0 +1,76 @@
+# Ignore Python bytecode cache directories
+__pycache__/
+
+
+# Ignore Visual Studio Code directories and settings
+.vscode/
+
+# Ignore JetBrains IDE project files
+.idea/
+
+# Environment variables file
+.env
+
+# Python virtual environments
+venv/
+env/
+.venv/
+.pyenv/
+
+# Byte-compiled Python files
+*.py[cod]
+
+# Log files
+*.log
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# macOS Finder metadata files
+.DS_Store
+
+# macOS resource fork files
+.AppleDouble
+.LSOverride
+
+# Icon file
+Icon?
+
+# Thumbnails
+._*
+
+# Files that might appear on external disk drives
+.Spotlight-V100
+.Trashes
+
+# macOS-specific temp files
+*.swp
+
+# distribute files
+*.egg-info/
+build/
+dist/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.playwright-cli/
+
+# Claude Code session metadata (worktrees, settings, etc.)
+.claude/
+
+# Local-only docs, tests, and Claude Code project config
+docs/
+tests/
+reports/
+CLAUDE.md
+
+# arxiv-sanity-lite style corpus (SQLite + TF-IDF cache)
+data/
+
+# Generated Obsidian wiki vault (personal notes + verdicts live here; rebuilt by wiki.py)
+wiki/
+
+# Machine-specific settings (host, allowed networks, tokens) — sourced by env.sh
+env.local.sh
+nohup.out

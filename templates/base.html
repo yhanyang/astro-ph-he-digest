@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}arXiv · astro-ph.HE{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@700;800&display=swap" />
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <script src="/static/paper_actions.js?v=1" defer></script>
+  <link rel="stylesheet" href="/static/style.css?v=32" />
+  {% block head %}{% endblock %}
+</head>
+<body class="topbar-layout">
+  <header class="site-header">
+    <div class="top">
+      <div>
+        <h1><a href="/site/">arXiv <span class="dot">·</span> astro-ph.HE</a>{% if SITE_TEAM %} <span class="team">{{ SITE_TEAM }}</span>{% endif %}</h1>
+        <div class="header-meta">{% block meta %}Search · similar papers · recommendations · starred{% endblock %}</div>
+      </div>
+      <nav class="links" aria-label="Site">
+        <a href="/site/">⌂ Day / Week / Month / Year</a>
+        <a href="/wiki/Home.html">📚 Wiki</a>
+        <a href="/search">🔍 Search</a>
+        <a href="/recommend">✦ Recommend</a>
+        <a href="/starred">★ Starred</a>
+        <a href="/liked">👍 Liked</a>
+      </nav>
+    </div>
+  </header>
+  <div class="subbar">
+    <form id="search-form" action="/search" method="get" role="search">
+      <input id="search-input" type="search" name="q" placeholder="Search all papers: title, authors, abstract…"
+             value="{{ request.query_params.get('q', '') }}" autocomplete="off" />
+    </form>
+    <div id="controls"
+         hx-get="/controls?active={{ selected_date.isoformat() if selected_date else '' }}"
+         hx-trigger="every 30s, generate-done from:body"
+         hx-swap="innerHTML">
+      {{ controls_html|safe }}
+    </div>
+  </div>
+  <main id="main-area">
+    {% block main %}{% endblock %}
+  </main>
+</body>
+</html>

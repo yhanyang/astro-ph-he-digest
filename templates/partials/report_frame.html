@@ -1,0 +1,12 @@
+<iframe id="report-iframe"
+        src="/r/{{ date }}/raw?v={{ raw_version }}"
+        title="arXiv daily report {{ date }}"
+        loading="lazy">
+</iframe>
+<script>
+(function () {
+  // /r/<date>#p12 (from search / similar / recommend links) -> scroll the iframe to [12].
+  var f = document.getElementById('report-iframe');
+  if (f && location.hash) f.setAttribute('src', f.getAttribute('src') + location.hash);
+})();
+</script>

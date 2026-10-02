@@ -1,0 +1,46 @@
+{% if kind == 'recommend' and words %}
+  <details class="sanity-words">
+    <summary>What the model learned{% if n_positive is defined %} from {{ n_positive }} positive{{ '' if n_positive == 1 else 's' }} ({% if n_starred %}★ {{ n_starred }} starred{% endif %}{% if n_starred and n_liked %} + {% endif %}{% if n_liked %}👍 {{ n_liked }} liked{% endif %}{% if n_unknown %}; {{ n_unknown }} not in corpus{% endif %}){% endif %}</summary>
+    <p><span class="w-pos">+</span> {% for w in words[:30] %}<span class="word" title="{{ '%.3f'|format(w.weight) }}">{{ w.word }}</span>{% endfor %}</p>
+    <p><span class="w-neg">−</span> {% for w in words[-15:] %}<span class="word word-neg" title="{{ '%.3f'|format(w.weight) }}">{{ w.word }}</span>{% endfor %}</p>
+  </details>
+{% endif %}
+
+{% if papers %}
+  <ol class="sanity-list" data-kind="{{ kind }}">
+    {% for p in papers %}
+      <li class="sanity-card{% if p.verdict == 'like' %} is-liked{% elif p.verdict == 'dislike' %} is-dismissed{% endif %}">
+        <div class="sanity-card-head">
+          {% if kind != 'liked' %}<span class="sanity-score" title="score">{{ '%.2f'|format(p.score) }}</span>{% endif %}
+          <a class="sanity-title" href="{{ p.url }}" target="_blank" rel="noopener">{{ p.title }}</a>
+          <div class="paper-actions" data-pid="{{ p.pid }}" data-date="{{ p.report_date }}" data-number="{{ p.number }}"
+               data-arxiv-id="{{ p.display_id or p.pid }}" data-url="{{ p.url }}" data-title="{{ p.title }}" data-authors="{{ p.authors }}"
+               data-verdict="{{ p.verdict or '' }}" data-note="{{ p.note or '' }}" data-full="{{ '1' if p.full else '0' }}"></div>
+        </div>
+        <p class="sanity-meta">{{ p.authors }}</p>
+        <p class="sanity-meta">
+          <a href="/r/{{ p.report_date }}#p{{ p.number }}" title="Open in the daily report">{{ p.report_date }} · [{{ p.number }}]</a>
+          · <span class="sanity-pid">{{ p.pid }}</span>{% if not p.full %} · <span class="sanity-entry" title="index-only topic: title and abstract in the report">abstract only</span>{% endif %}
+          {% if p.journal_ref %} · <span class="sanity-jref">{{ p.journal_ref }}</span>{% endif %}
+          {% for c in p.categories %}<span class="sanity-cat">{{ c }}</span>{% endfor %}
+        </p>
+        <details class="sanity-abstract"><summary>Abstract</summary><p>{{ p.summary }}</p></details>
+        {% if p.note %}<p class="paper-note"><strong>Note:</strong> {{ p.note }}</p>{% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+{% elif empty_hint == 'no-positives' %}
+  <div class="alert alert-info">
+    {% if source == 'liked' %}<h3>No liked papers yet</h3><p>Click 👍 on a few papers in the daily reports; likes are stored server-side and then rank everything else in the corpus here.</p>
+    {% elif source == 'starred' %}<h3>No starred papers in this browser</h3><p>Star a few papers (☆ in the entry's action row), or switch the source to 👍 liked.</p>
+    {% else %}<h3>No starred or liked papers yet</h3><p>Star (☆) or like (👍) a few papers in any daily report; then come back here for an SVM ranking of everything else in the corpus.</p>{% endif %}
+  </div>
+{% elif kind == 'liked' %}
+  <div class="alert alert-info"><h3>No liked papers{% if days %} in this window{% endif %}</h3><p>Click 👍 on a paper in a daily report or on the Search / Similar / Recommend cards; it will be listed here.</p></div>
+{% elif kind == 'search' %}
+  <div class="alert alert-info"><h3>No matches</h3><p>Try fewer or different words; matching is literal (title ×20, authors ×10, abstract ×1 per term).</p></div>
+{% elif kind == 'recommend' %}
+  <div class="alert alert-info"><h3>Nothing to rank</h3><p>Every paper in the selected time window is already starred / liked / dismissed, or the corpus is empty.</p></div>
+{% else %}
+  <div class="alert alert-info"><h3>No similar papers in this window</h3></div>
+{% endif %}

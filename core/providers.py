@@ -1,0 +1,310 @@
+"""LLM provider clients, individual generators, and the fallback dispatcher."""
+
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import time
+
+import anthropic
+from google import genai
+from openai import OpenAI
+
+from core.config import (
+    CLAUDE_API_KEY,
+    CLAUDE_BACKEND,
+    CLAUDE_MODEL,
+    CODEX_CLI,
+    FALLBACK_ORDER,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    OPENAI_API_KEY,
+    OPENAI_BACKEND,
+    OPENAI_MODEL,
+    PREFERRED_PROVIDER,
+)
+from core.prompt import build_prompt
+
+claude_client = anthropic.Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
+gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+DEFAULT_CODEX_CLI_PATHS = (
+    '/Applications/ChatGPT.app/Contents/Resources/codex',
+    '/opt/homebrew/bin/codex',
+    '/usr/local/bin/codex',
+)
+CODEX_EXTRA_PATHS = (
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+)
+
+
+def _is_quota_error(error: Exception) -> bool:
+    """Heuristic check for 429 / quota / rate-limit errors across SDK conventions."""
+    msg = str(error).lower()
+    return ('429' in msg) or ('resource_exhausted' in msg) or ('quota exceeded' in msg)
+
+
+def _generate_with_claude_api(prompt: str) -> str:
+    if not claude_client:
+        raise RuntimeError('Claude API key is missing. Set CLAUDE_API_KEY.')
+    response = claude_client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=16000,
+        messages=[{'role': 'user', 'content': prompt}],
+    )
+    return next(block.text for block in response.content if block.type == 'text')
+
+
+def _generate_with_claude_cli(prompt: str) -> str:
+    """Headless Claude Code CLI: opus, streams progress, consumes Max quota.
+
+    Uses ``--output-format stream-json --include-partial-messages`` so each
+    text delta and ``api_retry`` event is surfaced live. Without streaming a
+    buffered subprocess looks identical to a hang, and silent server-side
+    retries (up to 10 attempts with backoff) eat the timeout invisibly.
+    ``--tools ""`` disables built-in tools (no agent loops);
+    ``--no-session-persistence`` skips an unused session record. ``--bare``
+    is avoided: it forces ``ANTHROPIC_API_KEY`` and would break Max OAuth.
+
+    Raises:
+        subprocess.CalledProcessError: If the CLI exits non-zero.
+        RuntimeError: If the stream ends without a ``result`` event.
+    """
+    proc = subprocess.Popen(
+        [
+            'claude',
+            '-p',
+            '--output-format',
+            'stream-json',
+            '--include-partial-messages',
+            '--verbose',
+            '--model',
+            'opus',
+            '--tools',
+            '',
+            '--no-session-persistence',
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    proc.stdin.write(prompt)
+    proc.stdin.close()
+
+    start = time.monotonic()
+    output_chars = 0
+    last_tick = start
+    result_text: str | None = None
+
+    try:
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ev_type = event.get('type')
+            if ev_type == 'system':
+                subtype = event.get('subtype')
+                if subtype == 'init':
+                    print(f'   [claude] session started, model={event.get("model")}')
+                elif subtype == 'api_retry':
+                    attempt = event.get('attempt')
+                    max_retries = event.get('max_retries')
+                    err = event.get('error') or 'unknown'
+                    delay_s = (event.get('retry_delay_ms') or 0) / 1000
+                    print(
+                        f'   [claude] api retry {attempt}/{max_retries} '
+                        f'(error={err}, wait={delay_s:.1f}s)'
+                    )
+            elif ev_type == 'stream_event':
+                inner = event.get('event', {})
+                inner_type = inner.get('type')
+                if inner_type == 'message_start':
+                    ttft = event.get('ttft_ms')
+                    if ttft is not None:
+                        print(f'   [claude] first token at {ttft / 1000:.1f}s')
+                elif inner_type == 'content_block_delta':
+                    text = inner.get('delta', {}).get('text', '')
+                    output_chars += len(text)
+                    now = time.monotonic()
+                    if now - last_tick >= 5:
+                        print(
+                            f'   [claude] streaming... {output_chars} chars, '
+                            f'{now - start:.0f}s elapsed'
+                        )
+                        last_tick = now
+            elif ev_type == 'result':
+                result_text = event.get('result', '')
+                cost = event.get('total_cost_usd')
+                cost_str = f', cost ${cost:.4f}' if cost is not None else ''
+                print(
+                    f'   [claude] done in {time.monotonic() - start:.0f}s, '
+                    f'{output_chars} chars{cost_str}'
+                )
+    except BaseException:
+        proc.kill()
+        raise
+
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+    if proc.returncode != 0:
+        stderr = proc.stderr.read() if proc.stderr else ''
+        raise subprocess.CalledProcessError(proc.returncode, proc.args, stderr=stderr)
+    if result_text is None:
+        raise RuntimeError('Claude CLI finished without a result event.')
+    return result_text.strip()
+
+
+def _generate_with_claude(prompt: str) -> str:
+    """Dispatch to the API SDK or CLI subprocess depending on ``CLAUDE_BACKEND``."""
+    if CLAUDE_BACKEND == 'api':
+        return _generate_with_claude_api(prompt)
+    return _generate_with_claude_cli(prompt)
+
+
+def _generate_with_gemini(prompt: str) -> str:
+    if not gemini_client:
+        raise RuntimeError('Gemini API key is missing. Set GEMINI_API_KEY.')
+    response = gemini_client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+    return response.text
+
+
+def _generate_with_openai_api(prompt: str) -> str:
+    if not openai_client:
+        raise RuntimeError('OpenAI API key is missing. Set OPENAI_API_KEY.')
+    response = openai_client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[{'role': 'user', 'content': prompt}],
+    )
+    return response.choices[0].message.content
+
+
+def _generate_with_openai_codex(prompt: str) -> str:
+    """Headless Codex CLI backend, using the logged-in ChatGPT/Codex account."""
+    with tempfile.TemporaryDirectory(prefix='arxiv-report-codex-') as tmp_dir:
+        output_path = Path(tmp_dir) / 'last-message.txt'
+        codex_cli = _codex_cli()
+        args = [
+            codex_cli,
+            'exec',
+            '--model',
+            OPENAI_MODEL,
+            '--sandbox',
+            'read-only',
+            '--skip-git-repo-check',
+            '--ephemeral',
+            '--ignore-user-config',
+            '--ignore-rules',
+            '--output-last-message',
+            str(output_path),
+            '-',
+        ]
+        try:
+            subprocess.run(
+                args,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                check=True,
+                env=_codex_env(codex_cli),
+            )
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or exc.stdout or str(exc)).strip()
+            raise RuntimeError(
+                f'Codex CLI failed with exit code {exc.returncode}: {detail}'
+            ) from exc
+        return output_path.read_text(encoding='utf-8').strip()
+
+
+def _codex_cli() -> str:
+    if CODEX_CLI:
+        return CODEX_CLI
+    for path in DEFAULT_CODEX_CLI_PATHS:
+        if Path(path).exists():
+            return path
+    path = shutil.which('codex')
+    if path:
+        return path
+    return 'codex'
+
+
+def _codex_env(codex_cli: str) -> dict[str, str]:
+    env = os.environ.copy()
+    path_parts = [str(Path(codex_cli).parent), *CODEX_EXTRA_PATHS]
+    existing = env.get('PATH')
+    if existing:
+        path_parts.append(existing)
+    env['PATH'] = ':'.join(dict.fromkeys(path_parts))
+    return env
+
+
+def _generate_with_openai(prompt: str) -> str:
+    if OPENAI_BACKEND == 'api' and openai_client:
+        return _generate_with_openai_api(prompt)
+    if OPENAI_BACKEND == 'api':
+        print('   [openai] OPENAI_BACKEND=api but OPENAI_API_KEY is missing; using Codex CLI.')
+    return _generate_with_openai_codex(prompt)
+
+
+_GENERATORS = {
+    'claude': ('Claude', _generate_with_claude),
+    'gemini': ('Gemini', _generate_with_gemini),
+    'openai': ('OpenAI', _generate_with_openai),
+}
+
+
+def generate_report(papers: list[dict]) -> tuple[str, str]:
+    """Build the prompt and dispatch to LLM providers in fallback order.
+
+    The preferred provider is tried first; on quota / rate-limit errors the
+    dispatcher falls through to the next provider in ``FALLBACK_ORDER``.
+
+    Args:
+        papers: Papers from ``fetch_arxiv_papers``; an empty list short-circuits
+            to a placeholder HTML fragment.
+
+    Returns:
+        A pair ``(report_html, provider)``: the LLM-generated HTML body
+        fragment and the slug of the provider that produced it.
+
+    Raises:
+        RuntimeError: If every provider fails.
+    """
+    if not papers:
+        return 'No new papers today.</p>', ''
+    return generate_text(build_prompt(papers))
+
+
+def generate_text(prompt: str) -> tuple[str, str]:
+    """Send ``prompt`` to the providers in fallback order; return ``(text, provider)``."""
+    providers = [PREFERRED_PROVIDER] + [p for p in FALLBACK_ORDER if p != PREFERRED_PROVIDER]
+    print(f'🧠 Preferred provider: {providers[0]}. Generating report...')
+
+    last_error: Exception | None = None
+    for i, provider in enumerate(providers):
+        label, generate = _GENERATORS[provider]
+        try:
+            print(f'   Trying {label}...')
+            return generate(prompt), provider
+        except Exception as e:
+            last_error = e
+            next_provider = providers[i + 1] if i + 1 < len(providers) else None
+            if _is_quota_error(e) and next_provider:
+                print(
+                    f'⚠️ {provider} quota/rate limit hit, falling back to {next_provider}. Details: {e}'
+                )
+                continue
+            print(f'⚠️ {provider} failed: {e}')
+
+    raise RuntimeError(f'All providers failed. Last error: {last_error}')
